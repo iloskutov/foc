@@ -1,0 +1,17 @@
+# vim:set ft=make:
+
+SUBSYSTEMS              += LIBUART
+OBJECTS_LIBUART         += uart_sun4i.o
+PREPROCESS_PARTS        += sun4i libuart generic_tickless_idle
+CONFIG_KERNEL_LOAD_ADDR := 0x40000000
+
+uart_IMPL             += uart-sun4i
+config_IMPL           += config-arm-sun4i
+mem_layout_IMPL       += mem_layout-arm-sun4i
+pic_IMPL              += pic-arm-sun4i
+bootstrap_IMPL        += bootstrap-arm-sun4i
+timer_IMPL            += timer-arm-sun4i
+timer_tick_IMPL       += timer_tick-single-vector
+kernel_uart_IMPL      += kernel_uart-arm-sun4i
+reset_IMPL            += reset-arm-sun4i
+clock_IMPL            += clock-generic
