@@ -32,10 +32,10 @@ EXTENSION class Perf_cnt
 {
 private:
   enum {
-    CPU_CONTROL = Mem_layout::Mp_scu_map_base + 0x00,
-    CONFIG      = Mem_layout::Mp_scu_map_base + 0x04,
-    CPU_STATUS  = Mem_layout::Mp_scu_map_base + 0x08,
-    MON_CONTROL = Mem_layout::Mp_scu_map_base + 0x10,
+    CPU_CONTROL = 0x00,
+    CONFIG      = 0x04,
+    CPU_STATUS  = 0x08,
+    MON_CONTROL = 0x10,
 
     MON_CONTROL_ENABLE = 1,
     MON_CONTROL_RESET  = 2,
@@ -74,10 +74,10 @@ private:
   };
 
   static Address mon_event_type_addr(int nr)
-  { return Mem_layout::Mp_scu_map_base + 0x14 + nr; }
+  { return 0x14 + nr; }
 
   static Address mon_counter(int nr)
-  { return Mem_layout::Mp_scu_map_base + 0x1c + nr * 4; }
+  { return 0x1c + nr * 4; }
 };
 
 // ------------------------------------------------------------------------
@@ -231,33 +231,36 @@ Perf_cnt::set_event_type(int, int)
 // ------------------------------------------------------------------------
 IMPLEMENTATION [arm && perf_cnt && mpcore]:
 
-#include "io.h"
+#include "cpu.h"
 
 char const *Perf_cnt::perf_type_str = "MP-C";
 
 PRIVATE static
 void
 Perf_cnt::set_event_type(int counter_nr, int event)
-{ Io::write<unsigned char>(event, mon_event_type_addr(counter_nr)); }
+{ Cpu::scu->write<unsigned char>(event, mon_event_type_addr(counter_nr)); }
 
 PUBLIC static
 unsigned long
 Perf_cnt::read_counter(int counter_nr)
-{ return Io::read<Mword>(mon_counter(counter_nr)); }
+{ return Cpu::scu->read<Mword>(mon_counter(counter_nr)); }
 
 PUBLIC static FIASCO_INIT_CPU
 void
 Perf_cnt::init_cpu()
 {
-  Io::write<Mword>(0xff << 16 // clear overflow flags
-                   | MON_CONTROL_RESET | MON_CONTROL_ENABLE,
-                   MON_CONTROL);
+  static_assert(Scu::Available, "No SCU available in this configuration");
+
+  Cpu::scu->write<Mword>(0xff << 16 // clear overflow flags
+                        | MON_CONTROL_RESET | MON_CONTROL_ENABLE,
+                        MON_CONTROL);
 
   // static config for now...
   set_event_type(7, EVENT_CYCLE_COUNT);
 
   //set_event_type(0, EVENT_EXTMEM_TRANSFER_READ);
   //set_event_type(1, EVENT_EXTMEM_TRANSFER_WRITE);
+
 
 #if 0
   set_event_type(3, EVENT_EXTMEM_TRANSFER_READ);
@@ -281,7 +284,7 @@ Perf_cnt::read_cycle_cnt()
 PUBLIC static
 unsigned
 Perf_cnt::mon_event_type(int nr)
-{ return Io::read<unsigned char>(mon_event_type_addr(nr)); }
+{ return Cpu::scu->read<unsigned char>(mon_event_type_addr(nr)); }
 
 // ------------------------------------------------------------------------
 IMPLEMENTATION [arm && perf_cnt && (armca8 || armca9 || armca15)]:
@@ -294,7 +297,8 @@ int Perf_cnt::_nr_counters;
 PRIVATE static
 bool
 Perf_cnt::is_avail()
-{ return Cpu::boot_cpu()->copro_dbg_model() == Cpu::Copro_dbg_model_v7; }
+{ return Cpu::boot_cpu()->copro_dbg_model() == Cpu::Copro_dbg_model_v7 ||
+         Cpu::boot_cpu()->copro_dbg_model() == Cpu::Copro_dbg_model_v7_1; }
 
 PRIVATE static
 void
@@ -454,7 +458,8 @@ Perf_cnt::init()
   Tb_entry::set_cycle_read_func(read_cycle_cnt);
 }
 
-PUBLIC static inline void
+PUBLIC static inline FIASCO_INIT_CPU
+void
 Perf_cnt::init_ap()
 {
   init_cpu();

@@ -209,7 +209,6 @@ Vkey::get()
 IMPLEMENTATION [!debug && serial]:
 
 #include "kernel_console.h"
-#include "kernel_uart.h"
 
 static Console *uart = Kconsole::console()->find_console(Console::UART);
 

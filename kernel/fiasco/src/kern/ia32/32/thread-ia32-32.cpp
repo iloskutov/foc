@@ -74,11 +74,12 @@ Thread::trap_state_to_rf(Trap_state *ts)
 PRIVATE static inline NEEDS[Thread::trap_state_to_rf]
 bool FIASCO_WARN_RESULT
 Thread::copy_utcb_to_ts(L4_msg_tag const &tag, Thread *snd, Thread *rcv,
-                        unsigned char rights)
+                        L4_fpage::Rights rights)
 {
   Trap_state *ts = (Trap_state*)rcv->_utcb_handler;
   Mword       s  = tag.words();
   Unsigned32  cs = ts->cs();
+  Unsigned32  eflags_tf = ts->flags() & EFLAGS_TF;
   Utcb *snd_utcb = snd->utcb().access();
 
   // XXX: check that gs and fs point to valid user_entry only, for gdt and
@@ -101,7 +102,7 @@ Thread::copy_utcb_to_ts(L4_msg_tag const &tag, Thread *snd, Thread *rcv,
   // reset segments
   rcv->_gs = rcv->_fs = 0;
 
-  if (tag.transfer_fpu() && (rights & L4_fpage::W))
+  if (tag.transfer_fpu() && (rights & L4_fpage::Rights::W()))
     snd->transfer_fpu(rcv);
 
   // sanitize eflags
@@ -109,6 +110,13 @@ Thread::copy_utcb_to_ts(L4_msg_tag const &tag, Thread *snd, Thread *rcv,
 
   // don't allow to overwrite the code selector!
   ts->cs(cs);
+
+  /*
+   * don't allow to overwrite the single-step flag
+   * (it might have changed in the kernel without the Genode exception handler
+   *  knowing about it, so it could try to restore an outdated value)
+   */
+  ts->flags((ts->flags() & ~EFLAGS_TF) | eflags_tf);
 
   bool ret = transfer_msg_items(tag, snd, snd_utcb,
                                 rcv, rcv->utcb().access(), rights);
@@ -120,7 +128,7 @@ Thread::copy_utcb_to_ts(L4_msg_tag const &tag, Thread *snd, Thread *rcv,
 PRIVATE static inline
 bool FIASCO_WARN_RESULT
 Thread::copy_ts_to_utcb(L4_msg_tag const &, Thread *snd, Thread *rcv,
-                        unsigned char rights)
+                        L4_fpage::Rights rights)
 {
   Utcb *rcv_utcb = rcv->utcb().access();
   Trap_state *ts = (Trap_state*)snd->_utcb_handler;
@@ -139,7 +147,7 @@ Thread::copy_ts_to_utcb(L4_msg_tag const &, Thread *snd, Thread *rcv,
     else
       Mem::memcpy_mwords (rcv_utcb->values, &ts->_gs, r > 16 ? 16 : r);
 
-    if (rcv_utcb->inherit_fpu() && (rights & L4_fpage::W))
+    if (rcv_utcb->inherit_fpu() && (rights & L4_fpage::Rights::W()))
 	snd->transfer_fpu(rcv);
   }
   return true;
@@ -297,7 +305,7 @@ PRIVATE static
 int
 Thread::call_nested_trap_handler(Trap_state *ts)
 {
-  unsigned log_cpu = dbg_find_cpu();
+  Cpu_number log_cpu = dbg_find_cpu();
   unsigned long &ntr = nested_trap_recover.cpu(log_cpu);
 
 #if 0
@@ -323,7 +331,6 @@ Thread::call_nested_trap_handler(Trap_state *ts)
 
   p.pdir = Kernel_task::kernel_task()->virt_to_phys((Address)Kmem::dir());
   p.handler = nested_trap_handler;
-
 
   // don't set %esp if gdb fault recovery to ensure that exceptions inside
   // kdb/jdb don't overwrite the stack
