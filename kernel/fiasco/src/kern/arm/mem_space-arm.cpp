@@ -440,7 +440,7 @@ Mem_space::next_asid(Cpu_number cpu)
 }
 
 //----------------------------------------------------------------------------
-IMPLEMENTATION [armv7 && (armca9 || armca15)]:
+IMPLEMENTATION [armv7 && armca9]:
 
 PRIVATE inline static
 unsigned long

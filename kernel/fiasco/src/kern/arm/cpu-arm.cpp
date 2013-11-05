@@ -140,19 +140,10 @@ EXTENSION class Cpu
 {
 public:
   enum {
-    Cp15_c1_ha              = 1 << 17,
-    Cp15_c1_nmfi            = 1 << 27,
-  };
-};
-
-INTERFACE [arm && armv7 && (armca9 || armca15)]:
-
-EXTENSION class Cpu
-{
-public:
-  enum {
     Cp15_c1_sw              = 1 << 10,
+    Cp15_c1_ha              = 1 << 17,
     Cp15_c1_ee              = 1 << 25,
+    Cp15_c1_nmfi            = 1 << 27,
     Cp15_c1_te              = 1 << 30,
     Cp15_c1_rao_sbop        = (0xf << 3) | (1 << 16) | (1 << 18) | (1 << 22) | (1 << 23),
 
@@ -296,44 +287,7 @@ Cpu::early_init_platform()
 }
 
 //---------------------------------------------------------------------------
-IMPLEMENTATION [arm && armca15]:
-PRIVATE static inline void
-Cpu::early_init_platform()
-{
-  Io::write<Mword>(Io::read<Mword>(Mem_layout::Gic_cpu_map_base + 0) | 1,
-                   Mem_layout::Gic_cpu_map_base + 0);
-  Io::write<Mword>(Io::read<Mword>(Mem_layout::Gic_dist_map_base + 0) | 1,
-                   Mem_layout::Gic_dist_map_base + 0);
-
-  Mem_unit::clean_dcache();
-
-  enable_smp();
-}
-
-//---------------------------------------------------------------------------
-IMPLEMENTATION [arm && mp && (mpcore || armca9)]:
-
-PUBLIC static inline NEEDS["mem_layout.h", "io.h"]
-int
-Cpu::num_cpus()
-{
-  return (Io::read<Mword>(Mem_layout::Mp_scu_map_base + 4) & 3) + 1;
-}
-
-
-//---------------------------------------------------------------------------
-IMPLEMENTATION [arm && mp && armca15]:
-
-PUBLIC static inline int
-Cpu::num_cpus()
-{
-  unsigned num;
-  asm volatile ("mrc p15, 1, %0, c9, c0, 2" : "=r"(num));
-  return ((num >> 24) & 0x3)+ 1;
-}
-
-//---------------------------------------------------------------------------
-IMPLEMENTATION [arm && !(mpcore || armca9 || armca15)]:
+IMPLEMENTATION [arm && !(mpcore || armca9)]:
 
 PRIVATE static inline void Cpu::early_init_platform()
 {}
@@ -551,7 +505,7 @@ PRIVATE static inline
 void Cpu::init_errata_workarounds() {}
 
 //---------------------------------------------------------------------------
-IMPLEMENTATION [arm_cpu_errata && armv6plus && !omap4_pandaboard]:
+IMPLEMENTATION [arm_cpu_errata && armv6plus]:
 
 PRIVATE static inline
 void
@@ -614,11 +568,6 @@ Cpu::init_errata_workarounds()
           if (rev < 0x30)
             set_c15_c0_1(1 << 11);
         }
-      // errata: 774769 (must be done in secure mode)
-      if (part == 0xc0f)
-         {
-           clear_actrl(0x1 << 25);
-         }
     }
 }
 
